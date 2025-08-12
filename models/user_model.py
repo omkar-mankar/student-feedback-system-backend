@@ -1,3 +1,5 @@
 from utils.db import db
 
-users_collection = db["users"]  # Students and Admins in same collection
+# Separate collections
+admins_collection = db["admins"]  #collection for admins
+students_collection = db["students"]  #collection for students

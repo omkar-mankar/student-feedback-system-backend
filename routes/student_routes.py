@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt
-from models.user_model import users_collection
+from models.user_model import students_collection
 from models.course_model import courses_collection
 from bson import ObjectId
 
@@ -10,8 +10,7 @@ def is_admin():
     claims = get_jwt()
     return claims.get("role") == "admin"
 
-
-# Get all students (Admin only)
+# Get all students
 @student_bp.route("/students", methods=["GET"])
 @jwt_required()
 def get_all_students():
@@ -19,14 +18,12 @@ def get_all_students():
         return jsonify({"error": "Admin access only"}), 403
 
     students = []
-    for student in users_collection.find({"role": "student"}):
+    for student in students_collection.find():
         student["_id"] = str(student["_id"])
         students.append(student)
-
     return jsonify(students), 200
 
-
-# Assign courses to a student (Admin only)
+# Assign courses
 @student_bp.route("/students/<student_id>/assign-courses", methods=["PUT"])
 @jwt_required()
 def assign_courses(student_id):
@@ -36,22 +33,17 @@ def assign_courses(student_id):
     data = request.json
     course_ids = data.get("course_ids", [])
 
-    # Validate student exists
-    student = users_collection.find_one({"_id": ObjectId(student_id), "role": "student"})
+    student = students_collection.find_one({"_id": ObjectId(student_id)})
     if not student:
         return jsonify({"error": "Student not found"}), 404
 
-    # Validate all course IDs exist
-    valid_course_ids = []
-    for course_id in course_ids:
-        course = courses_collection.find_one({"_id": ObjectId(course_id)})
-        if course:
-            valid_course_ids.append(course_id)
+    valid_course_ids = [
+        cid for cid in course_ids
+        if courses_collection.find_one({"_id": ObjectId(cid)})
+    ]
 
-    # Update student document with assigned courses
-    users_collection.update_one(
+    students_collection.update_one(
         {"_id": ObjectId(student_id)},
         {"$set": {"courses": valid_course_ids}}
     )
-
     return jsonify({"message": "Courses assigned successfully!"}), 200
