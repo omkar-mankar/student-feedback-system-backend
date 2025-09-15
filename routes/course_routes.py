@@ -27,7 +27,7 @@ def add_course():
 
     course = {
         "course_name": data["course_name"],
-        "instructor": data.get("instructor", "")
+        "instructor": data.get("instructor", " ")
     }
     courses_collection.insert_one(course)
     return jsonify({"message": "Course added successfully!"}), 201
