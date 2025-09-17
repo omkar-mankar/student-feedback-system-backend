@@ -1,76 +1,72 @@
-""" from flask import Blueprint, Response, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from models.feedback_model import feedback_collection   # MongoDB collection for feedback
+from flask import Blueprint, Response, jsonify
+from flask_jwt_extended import jwt_required, get_jwt
+from models.feedback_model import feedback_collection
 import io, csv
-import pandas as pd
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from reportlab.lib import colors
 
-# Create a new blueprint for report export APIs
 report_bp = Blueprint("report_bp", __name__)
 
-# -- CSV Export --
+# ---------------------------
+# Export as CSV
+# ---------------------------
 @report_bp.route("/export/csv", methods=["GET"])
-@jwt_required()  # Require JWT authentication
+@jwt_required()
 def export_csv():
-    user = get_jwt_identity()  # Get the logged-in user from the token
-    if user["role"] != "admin":  # Only Admin is allowed
+    claims = get_jwt()  # get role info from JWT claims
+    if claims.get("role") != "admin":
         return jsonify({"error": "Access denied. Only admin can export reports."}), 403
 
-    # Fetch all feedback data from MongoDB (ignoring _id field)
     feedbacks = list(feedback_collection.find({}, {"_id": 0}))
     if not feedbacks:
         return jsonify({"error": "No feedback data found"}), 404
 
-    # Create an in-memory CSV file
+    # Create CSV
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=feedbacks[0].keys())  # CSV headers = keys
+    writer = csv.DictWriter(output, fieldnames=feedbacks[0].keys())
     writer.writeheader()
-    writer.writerows(feedbacks)  # Write feedback rows
+    writer.writerows(feedbacks)
 
-    # Send file as response
     response = Response(output.getvalue(), mimetype="text/csv")
     response.headers["Content-Disposition"] = "attachment; filename=feedback_report.csv"
     return response
 
 
-# --- PDF Export ---
+# ---------------------------
+# Export as PDF
+# ---------------------------
 @report_bp.route("/export/pdf", methods=["GET"])
-@jwt_required()  # Require JWT authentication
+@jwt_required()
 def export_pdf():
-    user = get_jwt_identity()  # Get the logged-in user from the token
-    if user["role"] != "admin":  # Only Admin is allowed
+    claims = get_jwt()
+    if claims.get("role") != "admin":
         return jsonify({"error": "Access denied. Only admin can export reports."}), 403
 
-    # Fetch all feedback data from MongoDB (ignoring _id field)
     feedbacks = list(feedback_collection.find({}, {"_id": 0}))
     if not feedbacks:
         return jsonify({"error": "No feedback data found"}), 404
 
-    # Convert feedback data into table format for PDF
-    data = [list(feedbacks[0].keys())]  # First row = column headers
+    # Prepare table data
+    data = [list(feedbacks[0].keys())]  # headers
     for fb in feedbacks:
-        data.append(list(fb.values()))  # Add each feedback as row
+        data.append(list(fb.values()))
 
-    # Create in-memory PDF file
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer)
 
-    # Build table for PDF
     table = Table(data)
     table.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,0), colors.grey),        # Header background color
-        ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),   # Header text color
-        ("ALIGN", (0,0), (-1,-1), "CENTER"),               # Center align text
-        ("GRID", (0,0), (-1,-1), 1, colors.black),         # Add grid lines
+        ("BACKGROUND", (0,0), (-1,0), colors.grey),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
+        ("ALIGN", (0,0), (-1,-1), "CENTER"),
+        ("GRID", (0,0), (-1,-1), 1, colors.black),
     ]))
-    doc.build([table])  # Generate PDF with the table
 
-    # Send PDF file as response
+    doc.build([table])
     buffer.seek(0)
+
     return Response(
         buffer,
         mimetype="application/pdf",
-        headers={"Content-Disposition": "attachment;filename=feedback_report.pdf"}
+        headers={"Content-Disposition": "attachment; filename=feedback_report.pdf"}
     )
-  """
