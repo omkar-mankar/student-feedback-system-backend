@@ -9,8 +9,7 @@ def is_admin():
     claims = get_jwt()
     return claims.get("role") == "admin"
 
-
-# Add Course (Admin only) with duplicate validation
+# Add Course / Subject (Admin only)
 @course_bp.route("/courses", methods=["POST"])
 @jwt_required()
 def add_course():
@@ -18,22 +17,22 @@ def add_course():
         return jsonify({"error": "Admin access only"}), 403
 
     data = request.json
-    if not data.get("course_name"):
-        return jsonify({"error": "course_name is required"}), 400
+    if not data.get("course_name") or not data.get("semester"):
+        return jsonify({"error": "course_name and semester are required"}), 400
 
-    # Check for duplicate course name
-    if courses_collection.find_one({"course_name": data["course_name"]}):
-        return jsonify({"error": "Course with this name already exists"}), 400
+    if courses_collection.find_one({"course_name": data["course_name"], "semester": data["semester"]}):
+        return jsonify({"error": "Course already exists in this semester"}), 400
 
     course = {
         "course_name": data["course_name"],
-        "instructor": data.get("instructor", " ")
+        "instructor": data.get("instructor", ""),
+        "semester": data["semester"],
+        "description": data.get("description", "")
     }
     courses_collection.insert_one(course)
     return jsonify({"message": "Course added successfully!"}), 201
 
-
-# Get All Courses (Both Admin & Students)
+# Get all courses
 @course_bp.route("/courses", methods=["GET"])
 @jwt_required()
 def get_courses():
@@ -43,46 +42,181 @@ def get_courses():
         courses.append(course)
     return jsonify(courses), 200
 
+# Get courses by semester
+@course_bp.route("/courses/semester/<semester>", methods=["GET"])
+@jwt_required()
+def get_courses_by_semester(semester):
+    courses = []
+    for course in courses_collection.find({"semester": semester}):
+        course["_id"] = str(course["_id"])
+        courses.append(course)
+    return jsonify(courses), 200
 
-# Get Single Course by ID (Both Admin & Students)
+# Get course details
 @course_bp.route("/courses/<course_id>", methods=["GET"])
 @jwt_required()
 def get_single_course(course_id):
     course = courses_collection.find_one({"_id": ObjectId(course_id)})
     if not course:
         return jsonify({"error": "Course not found"}), 404
-
     course["_id"] = str(course["_id"])
     return jsonify(course), 200
 
-
-# Update Course (Admin only)
-@course_bp.route("/courses/<course_id>", methods=["PUT"])
+# Update course
+@course_bp.route("/courses/<course_id>", methods=["PATCH"])
 @jwt_required()
-def update_course(course_id):
+def patch_course(course_id):
     if not is_admin():
         return jsonify({"error": "Admin access only"}), 403
 
     data = request.json
+    update_data = {}
+    for field in ["course_name", "instructor", "semester", "description"]:
+        if field in data:
+            update_data[field] = data[field]
+
     result = courses_collection.update_one(
         {"_id": ObjectId(course_id)},
-        {"$set": {"course_name": data.get("course_name"), "instructor": data.get("instructor", "")}}
+        {"$set": update_data}
     )
+
     if result.matched_count == 0:
         return jsonify({"error": "Course not found"}), 404
-
     return jsonify({"message": "Course updated successfully!"}), 200
 
 
-# Delete Course (Admin only)
+# Delete course
 @course_bp.route("/courses/<course_id>", methods=["DELETE"])
 @jwt_required()
 def delete_course(course_id):
     if not is_admin():
         return jsonify({"error": "Admin access only"}), 403
-
     result = courses_collection.delete_one({"_id": ObjectId(course_id)})
     if result.deleted_count == 0:
         return jsonify({"error": "Course not found"}), 404
-
     return jsonify({"message": "Course deleted successfully!"}), 200
+
+
+# from flask import Blueprint, request, jsonify
+# from flask_jwt_extended import jwt_required, get_jwt
+# from models.course_model import courses_collection
+# from bson import ObjectId
+
+# course_bp = Blueprint("course_bp", __name__)
+
+# def is_admin():
+#     claims = get_jwt()
+#     return claims.get("role") == "admin"
+
+
+# # ---------------------------
+# # Add Course (Admin only)
+# # ---------------------------
+# @course_bp.route("/courses", methods=["POST"])
+# @jwt_required()
+# def add_course():
+#     if not is_admin():
+#         return jsonify({"error": "Admin access only"}), 403
+
+#     data = request.json
+#     if not data.get("course_name"):
+#         return jsonify({"error": "course_name is required"}), 400
+#     if not data.get("semester"):
+#         return jsonify({"error": "semester is required"}), 400
+
+#     # Duplicate check
+#     if courses_collection.find_one({
+#         "course_name": data["course_name"],
+#         "semester": data["semester"]
+#     }):
+#         return jsonify({"error": "Course already exists in this semester"}), 400
+
+#     course = {
+#         "course_name": data["course_name"],
+#         "instructor": data.get("instructor", ""),
+#         "semester": data["semester"],
+#         "description": data.get("description", "")
+#     }
+#     courses_collection.insert_one(course)
+#     return jsonify({"message": "Course added successfully!"}), 201
+
+
+# # ---------------------------
+# # Get All Courses
+# # ---------------------------
+# @course_bp.route("/courses", methods=["GET"])
+# @jwt_required()
+# def get_courses():
+#     courses = []
+#     for course in courses_collection.find():
+#         course["_id"] = str(course["_id"])
+#         courses.append(course)
+#     return jsonify(courses), 200
+
+
+# # ---------------------------
+# # Get Courses by Semester
+# # ---------------------------
+# @course_bp.route("/courses/semester/<semester>", methods=["GET"])
+# @jwt_required()
+# def get_courses_by_semester(semester):
+#     courses = []
+#     for course in courses_collection.find({"semester": semester}):
+#         course["_id"] = str(course["_id"])
+#         courses.append(course)
+#     return jsonify(courses), 200
+
+
+# # ---------------------------
+# # Get Single Course Details
+# # ---------------------------
+# @course_bp.route("/courses/<course_id>", methods=["GET"])
+# @jwt_required()
+# def get_single_course(course_id):
+#     course = courses_collection.find_one({"_id": ObjectId(course_id)})
+#     if not course:
+#         return jsonify({"error": "Course not found"}), 404
+
+#     course["_id"] = str(course["_id"])
+#     return jsonify(course), 200
+
+
+# # ---------------------------
+# # Update Course (Admin only)
+# # ---------------------------
+# @course_bp.route("/courses/<course_id>", methods=["PUT"])
+# @jwt_required()
+# def update_course(course_id):
+#     if not is_admin():
+#         return jsonify({"error": "Admin access only"}), 403
+
+#     data = request.json
+#     result = courses_collection.update_one(
+#         {"_id": ObjectId(course_id)},
+#         {"$set": {
+#             "course_name": data.get("course_name"),
+#             "instructor": data.get("instructor", ""),
+#             "semester": data.get("semester"),
+#             "description": data.get("description", "")
+#         }}
+#     )
+#     if result.matched_count == 0:
+#         return jsonify({"error": "Course not found"}), 404
+
+#     return jsonify({"message": "Course updated successfully!"}), 200
+
+
+# # ---------------------------
+# # Delete Course (Admin only)
+# # ---------------------------
+# @course_bp.route("/courses/<course_id>", methods=["DELETE"])
+# @jwt_required()
+# def delete_course(course_id):
+#     if not is_admin():
+#         return jsonify({"error": "Admin access only"}), 403
+
+#     result = courses_collection.delete_one({"_id": ObjectId(course_id)})
+#     if result.deleted_count == 0:
+#         return jsonify({"error": "Course not found"}), 404
+
+#     return jsonify({"message": "Course deleted successfully!"}), 200
