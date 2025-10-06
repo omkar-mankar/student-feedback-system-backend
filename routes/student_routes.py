@@ -1,3 +1,4 @@
+# routes\student_routes.py
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from models.user_model import students_collection

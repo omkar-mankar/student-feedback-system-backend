@@ -1,3 +1,4 @@
+# routes\course_routes.py
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt
 from models.course_model import courses_collection

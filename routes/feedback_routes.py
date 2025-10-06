@@ -1,10 +1,16 @@
+# routes\feedback_routes.py
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from models.feedback_model import feedback_collection
 from models.course_model import courses_collection
 from models.user_model import students_collection
 from bson import ObjectId
 import datetime
+
+# Utility function to check if the user is an admin
+def is_admin():
+    claims = get_jwt()
+    return claims.get("role") == "admin"
 
 feedback_bp = Blueprint("feedback_bp", __name__)
 
@@ -90,3 +96,35 @@ def delete_feedback(feedback_id):
         return jsonify({"error": "Feedback not found"}), 404
 
     return jsonify({"message": "Feedback deleted successfully!"}), 200
+
+
+# Admin: Get all feedbacks
+@feedback_bp.route("/feedback/all", methods=["GET"])
+@jwt_required()
+def get_all_feedback():
+    if not is_admin():
+        return jsonify({"error": "Admin access only"}), 403
+
+    feedbacks = []
+    for fb in feedback_collection.find():
+        fb["_id"] = str(fb["_id"])
+        # add student username
+        student = students_collection.find_one({"_id": ObjectId(fb["student_id"])})
+        fb["student_name"] = student["username"] if student else "Unknown"
+        # add course name
+        course = courses_collection.find_one({"_id": ObjectId(fb["course_id"])})
+        fb["course_name"] = course["course_name"] if course else "Unknown"
+        feedbacks.append(fb)
+    return jsonify(feedbacks), 200
+
+    # Get feedback for logged-in student
+@feedback_bp.route("/feedback/student", methods=["GET"])
+@jwt_required()
+def get_my_feedback():
+    student_id = get_jwt_identity()  # student _id
+    feedbacks = list(feedback_collection.find({"student_id": student_id}))
+    for fb in feedbacks:
+        fb["_id"] = str(fb["_id"])
+        course = courses_collection.find_one({"_id": ObjectId(fb["course_id"])})
+        fb["course_name"] = course["course_name"] if course else "Unknown"
+    return jsonify(feedbacks)
